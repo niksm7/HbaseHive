@@ -1,0 +1,58 @@
+import org.apache.hadoop.hbase.HBaseConfiguration
+import org.apache.hadoop.hbase.client.Scan
+import org.apache.hadoop.hbase.mapreduce.TableInputFormat
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
+
+object HBaseReadExample {
+  def main(args: Array[String]): Unit = {
+    val spark = SparkSession.builder
+      .appName("HBaseReadExample")
+      .getOrCreate()
+
+    // Set HBase configuration
+    val hbaseConf = HBaseConfiguration.create()
+    hbaseConf.set("hbase.zookeeper.quorum", "your_zookeeper_quorum")
+    hbaseConf.set("hbase.zookeeper.property.clientPort", "2181")
+    hbaseConf.set(TableInputFormat.INPUT_TABLE, "your_hbase_table")
+
+    // Set scan object with filters
+    val scan = new Scan()
+    // Add your split condition on the datetime column, for example, using a RegexStringComparator
+    // This is just an example, please adjust it according to your data structure
+    scan.setFilter(new org.apache.hadoop.hbase.filter.SingleColumnValueFilter(
+      "your_column_family".getBytes,
+      "your_datetime_column".getBytes,
+      CompareFilter.CompareOp.EQUAL,
+      new org.apache.hadoop.hbase.filter.RegexStringComparator("2024-02-01")
+    ))
+
+    hbaseConf.set(TableInputFormat.SCAN, TableInputFormat.convertScanToString(scan))
+
+    // Read data from HBase into a DataFrame
+    val hbaseRDD = spark.sparkContext.newAPIHadoopRDD(
+      hbaseConf,
+      classOf[TableInputFormat],
+      classOf[org.apache.hadoop.hbase.io.ImmutableBytesWritable],
+      classOf[org.apache.hadoop.hbase.client.Result]
+    )
+
+    // Convert HBase RDD to DataFrame
+    import spark.implicits._
+    val hbaseDF = hbaseRDD.map { case (_, result) =>
+      // Convert HBase Result to a row in DataFrame
+      // Example: Assuming your datetime column is stored as a string
+      val rowKey = Bytes.toString(result.getRow)
+      val datetimeValue = Bytes.toString(result.getValue("your_column_family".getBytes, "your_datetime_column".getBytes))
+      (rowKey, datetimeValue)
+    }.toDF("rowKey", "datetimeColumn")
+
+    // Show the resulting DataFrame
+    hbaseDF.show()
+
+    // Perform further operations on your DataFrame as needed
+
+    // Stop the SparkSession
+    spark.stop()
+  }
+}
