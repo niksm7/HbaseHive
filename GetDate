@@ -1,29 +1,22 @@
-import java.time.LocalDate
-import
-java.time.format.DateTimeFo rmatter
-import java.time.temporal.WeekFields
+import java.time.{LocalDate, DayOfWeek, WeekFields, DateTimeFormatter}
 import java.util.Locale
 
-def generateWeeklyData(year: Int, hierarchy_type: String): Seq[(String, String, String, String, String, String, String, String, String, String, String)]
-val
-formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-val
-firstDayOfYear = LocalDate.of (year, 1, 1)
-val
-weekFields = WeekFields.of(Locale.getDefault())
-(1 to firstDayOfYear.range(weekFields.weekOfWeekBasedYear()).getMaximum.toInt).map {
-week =>
-val weekStartDate = firstDayOfYear.’with’(weeFields.weekOfWeekBasedYear(), week.toLong)
-val weekEndDate = weekStartDate.plusDays(4)
-val
-weekNumber = f"$week%02d"
-val weekDesc = s"$year $weekNumber"
+def generateWeeklyData(year: Int, hierarchy_type: String): Seq[(String, String, String, String, String, String, String, String, String, String, String)] = {
+  val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+  val firstDayOfYear = LocalDate.of(year, 1, 1)
+  val weekFields = WeekFields.of(Locale.getDefault())
 
-(s"WEEKLY", s"Weekly Periods", s"0", s"W_$year" , s"$year"
-weekEndDate. format (formatter), weekDesc,
-s"0","W", s"$hierarchy_type")
+  (1 to firstDayOfYear.range(weekFields.weekOfWeekBasedYear()).getMaximum.toInt).map { week =>
+    val weekStartDate = firstDayOfYear.`with`(weekFields.weekOfWeekBasedYear(), week.toLong)
+    val weekEndDate = weekStartDate.`with`(DayOfWeek.FRIDAY)
+    val weekNumber = f"$week%02d"
+    val weekDesc = s"$year $weekNumber"
 
-val currentYear = LocalDate.now().getYear
+    ("WEEKLY", "Weekly Periods", "0", s"W_$year", s"$year", weekEndDate.format(formatter), weekDesc, "0", "W", hierarchy_type)
+  }
+}
+
 val lastYear = LocalDate.now().getYear - 1
 
-generateWeeklyData(currentYear, “kyvos_gwm_pc)
+val result = generateWeeklyData(lastYear, "kyvos_gwm_pc")
+result.foreach(println)
