@@ -1,1 +1,29 @@
-316496
+import java.time.LocalDate
+import
+java.time.format.DateTimeFo rmatter
+import java.time.temporal.WeekFields
+import java.util.Locale
+
+def generateWeeklyData(year: Int, hierarchy_type: String): Seq[(String, String, String, String, String, String, String, String, String, String, String)]
+val
+formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+val
+firstDayOfYear = LocalDate.of (year, 1, 1)
+val
+weekFields = WeekFields.of(Locale.getDefault())
+(1 to firstDayOfYear.range(weekFields.weekOfWeekBasedYear()).getMaximum.toInt).map {
+week =>
+val weekStartDate = firstDayOfYear.’with’(weeFields.weekOfWeekBasedYear(), week.toLong)
+val weekEndDate = weekStartDate.plusDays(4)
+val
+weekNumber = f"$week%02d"
+val weekDesc = s"$year $weekNumber"
+
+(s"WEEKLY", s"Weekly Periods", s"0", s"W_$year" , s"$year"
+weekEndDate. format (formatter), weekDesc,
+s"0","W", s"$hierarchy_type")
+
+val currentYear = LocalDate.now().getYear
+val lastYear = LocalDate.now().getYear - 1
+
+generateWeeklyData(currentYear, “kyvos_gwm_pc)
