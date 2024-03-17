@@ -1,0 +1,56 @@
+import org.apache.hadoop.hbase.HBaseConfiguration
+import org.apache.hadoop.hbase.client.{Put, Result, Scan}
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.mapreduce.TableInputFormat
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.spark.sql.SparkSession
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+object HBaseCopyTable {
+  def main(args: Array[String]): Unit = {
+    val spark = SparkSession.builder()
+      .appName("HBaseCopyTable")
+      .getOrCreate()
+
+    val hbaseConf = HBaseConfiguration.create()
+    hbaseConf.set(TableInputFormat.INPUT_TABLE, "A")
+
+    val hbaseRDD = spark.sparkContext.newAPIHadoopRDD(hbaseConf,
+      classOf[TableInputFormat],
+      classOf[ImmutableBytesWritable],
+      classOf[Result])
+
+    val transformedRDD = hbaseRDD.map { case (_, result) =>
+      val rowKey = Bytes.toString(result.getRow) // Get row key
+      val clientRequestId = Bytes.toString(result.getValue(Bytes.toBytes("cf"), Bytes.toBytes("clientrequestid")))
+      val ingestionTime = Bytes.toString(result.getValue(Bytes.toBytes("cf"), Bytes.toBytes("ingestion_time")))
+      val transformedIngestionTime = transformIngestionTime(ingestionTime)
+      // Construct the new row key
+      val newRowKey = clientRequestId + "_" + transformedIngestionTime
+      (newRowKey, clientRequestId, ingestionTime)
+    }
+
+    transformedRDD.foreachPartition { partition =>
+      val hbaseConf = HBaseConfiguration.create()
+      val connection = org.apache.hadoop.hbase.client.ConnectionFactory.createConnection(hbaseConf)
+      val table = connection.getTable(org.apache.hadoop.hbase.TableName.valueOf("B"))
+      partition.foreach { case (newRowKey, clientRequestId, ingestionTime) =>
+        val put = new Put(Bytes.toBytes(newRowKey))
+        put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("clientrequestid"), Bytes.toBytes(clientRequestId))
+        put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("ingestion_time"), Bytes.toBytes(ingestionTime))
+        table.put(put)
+      }
+      table.close()
+      connection.close()
+    }
+
+    spark.stop()
+  }
+
+  def transformIngestionTime(dateTimeString: String): String = {
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    val dateTime = LocalDateTime.parse(dateTimeString, formatter)
+    dateTime.toLocalDate.toString
+  }
+}
