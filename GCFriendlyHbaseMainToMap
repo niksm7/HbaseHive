@@ -1,0 +1,61 @@
+import org.apache.spark.sql.SparkSession
+import org.apache.hadoop.hbase.{HBaseConfiguration, TableName}
+import org.apache.hadoop.hbase.client.{ConnectionFactory, Scan, Result, Put}
+import org.apache.hadoop.hbase.util.Bytes
+import scala.collection.JavaConverters._
+
+object HBaseCopyLimitedRows {
+  def main(args: Array[String]): Unit = {
+    val spark = SparkSession.builder()
+      .appName("HBaseCopyLimitedRows")
+      .getOrCreate()
+
+    val hbaseConf = HBaseConfiguration.create()
+    val tableNameA = "A"
+    val tableNameB = "B"
+    val batchSize = 10000
+    val totalLimit = 100000
+
+    val connection = ConnectionFactory.createConnection(hbaseConf)
+    val tableA = connection.getTable(TableName.valueOf(tableNameA))
+    val tableB = connection.getTable(TableName.valueOf(tableNameB))
+
+    try {
+      val startRowKeys = (0 until totalLimit by batchSize).map(_.toLong).toArray
+
+      startRowKeys.foreach { startRowKey =>
+        processBatch(tableA, tableB, startRowKey, batchSize)
+      }
+
+    } finally {
+      tableA.close()
+      tableB.close()
+      connection.close()
+      spark.stop()
+    }
+  }
+
+  def processBatch(tableA: Table, tableB: Table, startRowKey: Long, limit: Int): Unit = {
+    val scan = new Scan()
+    scan.withStartRow(Bytes.toBytes(startRowKey), true)
+    scan.setLimit(limit)
+
+    val resultScanner = tableA.getScanner(scan)
+    val results = resultScanner.iterator().asScala.take(limit)
+
+    try {
+      results.foreach { result =>
+        val rowKey = result.getRow
+        val clientRequestId = Bytes.toString(result.getValue(Bytes.toBytes("cf"), Bytes.toBytes("clientrequestid")))
+        val ingestionTime = Bytes.toString(result.getValue(Bytes.toBytes("cf"), Bytes.toBytes("ingestion_time")))
+
+        val put = new Put(rowKey)
+        put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("clientrequestid"), Bytes.toBytes(clientRequestId))
+        put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("ingestion_time"), Bytes.toBytes(ingestionTime))
+        tableB.put(put)
+      }
+    } finally {
+      resultScanner.close()
+    }
+  }
+}
