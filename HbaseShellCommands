@@ -1,0 +1,10 @@
+counter = 0
+
+scan 'tableA', {COLUMNS => ['cf:ingestion_time']} do |rowkey, result|
+  break if counter >= 1000  # Exit loop if 1000 rows have been copied
+  ingestion_time = Bytes.toString(result.getValue(Bytes.toBytes("cf"), Bytes.toBytes("ingestion_time")))
+  ingestion_date = ingestion_time.split(' ')[0]
+  rowkey_b = rowkey + '_' + ingestion_date
+  put 'tableB', rowkey_b, 'cf:ingestion_time', Bytes.toBytes(ingestion_time)
+  counter += 1
+end
