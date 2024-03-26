@@ -11,7 +11,7 @@ object SparkToImpalaAndSQL {
     val impalaDF: DataFrame = spark.read
       .format("jdbc")
       .option("url", "jdbc:impala://impala_host:21050/default")
-      .option("dbtable", "your_table")
+      .option("query", "SELECT ClientRequestId, IngestionDate FROM your_table")
       .option("user", "username")
       .option("password", "password")
       .option("fetchsize", "10000") // Fetch 10000 rows at a time
